@@ -1,7 +1,10 @@
-const String FirmwareVersion = "018300";
+const String FirmwareVersion = "018400";
 #define HardwareVersion "NCS314-8C for HW 2.x"
 //Format                _X.XXX_
-//NIXIE CLOCK SHIELD NCS314 v 2.x by GRA & AFCH (fominalec@gmail.com)
+//NIXIE CLOCK SHIELD NCS314-8C v 2.x by GRA & AFCH (fominalec@gmail.com)
+//1.84  20.11.2018 (Driver v 1.1 is required)
+//Fixed: Year value while seting up.
+//Fixed: Temp. reading speed fixed (yes, again)
 //1.83  14.09.2018 (Driver v 1.1 is required)
 //Fixed: Temp. reading speed fixed
 //Fixed: Dots mixed up (driver was updated to v. 1.1)
@@ -597,7 +600,7 @@ void loop() {
       //Serial.println("DateEdit");
       value[DateDayIndex] =  day();
       value[DateMonthIndex] = month();
-      value[DateYearIndex] = year() % 1000; //<- possible ERROR!!!!!!!!!!!!!!!!
+      value[DateYearIndex] = year();
       if (value[DateFormatIndex] == EU_DateFormat) stringToDisplay = PreZero(value[DateDayIndex]) + PreZero(value[DateMonthIndex]) + PreZero(value[DateYearIndex]);
       else stringToDisplay = PreZero(value[DateMonthIndex]) + PreZero(value[DateDayIndex]) + PreZero(value[DateYearIndex]);
       //Serial.print("str=");
@@ -992,7 +995,7 @@ void getRTCTime()
   RTC_day_of_week = bcdToDec(Wire.read()); //0-6 -> sunday - Saturday
   RTC_day = bcdToDec(Wire.read());
   RTC_month = bcdToDec(Wire.read());
-  RTC_year = bcdToDec(Wire.read());
+  RTC_year = bcdToDec(Wire.read())+2000; //experimental
 }
 
 int extractDigits(byte b)
@@ -1547,7 +1550,7 @@ String updateTemperatureString(float fDegrees)
   /*int delayTempUpdate;
     if (displayNow) delayTempUpdate=0;
     else delayTempUpdate = 1000;*/
-  //if ((millis() - lastTimeTemperatureString) > 1000)
+  if ((millis() - lastTimeTemperatureString) > 1000)
   {
     //Serial.println("F(Updating temp. str.)");
     lastTimeTemperatureString = millis();
