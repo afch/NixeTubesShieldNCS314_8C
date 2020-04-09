@@ -1,7 +1,10 @@
-const String FirmwareVersion = "018400";
-#define HardwareVersion "NCS314-8C for HW 2.x"
+const String FirmwareVersion = "018500";
+#define HardwareVersion "NCS314-8C HW 2.x"
 //Format                _X.XXX_
 //NIXIE CLOCK SHIELD NCS314-8C v 2.x by GRA & AFCH (fominalec@gmail.com)
+//1.85 09.04.2020
+//Dots sync with seconds
+//Added: DS3231 internal temperature sensor self test: 5 beeps if fail.
 //1.84  20.11.2018 (Driver v 1.1 is required)
 //Fixed: Year value while seting up.
 //Fixed: Temp. reading speed fixed (yes, again)
@@ -411,6 +414,7 @@ void setup()
 
   //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   doTest();
+  testDS3231TempSensor();
   //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   if (LEDsLock == 1)
   {
@@ -844,7 +848,7 @@ void rotateFireWorks()
   if (rotator > 5) rotator = 0;
 }
 
-String updateDisplayString()
+/*String updateDisplayString()
 {
   static  unsigned long lastTimeStringWasUpdated;
   if ((millis() - lastTimeStringWasUpdated) > 1000)
@@ -853,6 +857,17 @@ String updateDisplayString()
     return getTimeNow() + updateTemperatureString3Chars(getTemperature(value[DegreesFormatIndex]));
   }
   return stringToDisplay;
+}*/
+
+String updateDisplayString()
+{
+  static int prevS=-1;
+
+  if (second()!=prevS)
+  {
+    prevS=second();
+    return getTimeNow() + updateTemperatureString3Chars(getTemperature(value[DegreesFormatIndex]));
+  } else return stringToDisplay;
 }
 
 String getTimeNow()
@@ -931,25 +946,8 @@ void doTest()
 
 void doDotBlink()
 {
-  static unsigned long lastTimeBlink = millis();
-  static bool dotState = 0;
-  if ((millis() - lastTimeBlink) > 1000)
-  {
-    lastTimeBlink = millis();
-    dotState = !dotState;
-    if (dotState)
-    {
-      dotPattern = B11000000;
-      /*digitalWrite(pinUpperDots, HIGH);
-        digitalWrite(pinLowerDots, HIGH);*/
-    }
-    else
-    {
-      dotPattern = B00000000;
-      /*digitalWrite(pinUpperDots, LOW);
-        digitalWrite(pinLowerDots, LOW);*/
-    }
-  }
+  if (second()%2 == 0) dotPattern = B11000000;
+    else dotPattern = B00000000;
 }
 
 void setRTCDateTime(byte h, byte m, byte s, byte d, byte mon, byte y, byte w)
@@ -1626,5 +1624,28 @@ char getTempChar()
   if (value[DegreesFormatIndex] == CELSIUS) degrSymbol = '7';
   else degrSymbol = '2';
   return degrSymbol;
+}
+
+void testDS3231TempSensor()
+{
+  int8_t DS3231InternalTemperature=0;
+  Wire.beginTransmission(DS1307_ADDRESS);
+  Wire.write(0x11);
+  Wire.endTransmission();
+
+  Wire.requestFrom(DS1307_ADDRESS, 2);
+  DS3231InternalTemperature=Wire.read();
+  Serial.print(F("DS3231_T="));
+  Serial.println(DS3231InternalTemperature);
+  if ((DS3231InternalTemperature<5) || (DS3231InternalTemperature>65)) 
+  {
+    Serial.println(F("Faulty DS3231!"));
+    for (int i=0; i<5; i++)
+    {
+      //tone(pinBuzzer, 1000);
+      tone1.play(1000, 1000);
+      delay(2000);
+    }
+  }
 }
 
