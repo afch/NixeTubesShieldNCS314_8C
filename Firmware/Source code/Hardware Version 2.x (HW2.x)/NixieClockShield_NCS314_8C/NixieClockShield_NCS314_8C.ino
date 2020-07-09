@@ -1,7 +1,9 @@
-const String FirmwareVersion = "018500";
+const String FirmwareVersion = "019000";
 #define HardwareVersion "NCS314-8C HW 2.x"
 //Format                _X.XXX_
 //NIXIE CLOCK SHIELD NCS314-8C v 2.x by GRA & AFCH (fominalec@gmail.com)
+//1.90 08.06.2020 
+//Fixed: GPS timezone issue: added breakTime(now(), tm) to adjustTime function at Time.cpp
 //1.85 09.04.2020
 //Dots sync with seconds
 //Added: DS3231 internal temperature sensor self test: 5 beeps if fail.
