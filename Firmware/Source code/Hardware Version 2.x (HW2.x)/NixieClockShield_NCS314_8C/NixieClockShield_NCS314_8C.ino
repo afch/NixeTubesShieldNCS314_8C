@@ -1,7 +1,11 @@
-const String FirmwareVersion = "019000";
-#define HardwareVersion "NCS314-8C HW 2.x"
+const String FirmwareVersion = "019400";
+//#define HardwareVersion "NCS314-8C HW 2.x"
+const char HardwareVersion[] PROGMEM = {"NCS314-8C HW 2.x HV5122 or HV5222"};
 //Format                _X.XXX_
 //NIXIE CLOCK SHIELD NCS314-8C v 2.x by GRA & AFCH (fominalec@gmail.com)
+//1.94 23.02.2021
+//The driver has been changed to support BOTH HV5122 and HV5222 registers (switching using resistor R5222 Arduino pin No. 8)
+//SPI initialization moved to function SPISetup()
 //1.90 08.06.2020 
 //Fixed: GPS timezone issue: added breakTime(now(), tm) to adjustTime function at Time.cpp
 //1.85 09.04.2020
@@ -45,6 +49,9 @@ const String FirmwareVersion = "019000";
 #include <Wire.h>
 #include <ClickButton.h>
 #include <TimeLib.h>
+#ifndef GRA_AND_AFCH_TIME_LIB_MOD
+  #error The "Time (TimeLib)" library modified by GRA and AFCH must be used!
+#endif
 #include <Tone.h>
 #include <EEPROM.h>
 #include "doIndication314_8C.h"
@@ -138,7 +145,16 @@ int ModeButtonState = 0;
 int UpButtonState = 0;
 int DownButtonState = 0;
 
-//IR remote control /////////// START /////////////////////////////
+//IR remote control /////////// END /////////////////////////////
+
+#define GPS_SYNC_INTERVAL 1800000 // in milliseconds
+//#define GPS_SYNC_INTERVAL 180000 //3 minutes
+unsigned long Last_Time_GPS_Sync = 0;
+//uint32_t GPS_Sync_Interval=120000; // 2 minutes
+uint32_t GPS_Sync_Interval = 60000; // first try = 1 minute
+uint32_t MillsNow=0;
+#define TIME_TO_TRY 60000 //1 minute
+bool AttMsgWasShowed=false;
 
 #define GPS_BUFFER_LENGTH 83
 
@@ -389,10 +405,7 @@ void setup()
   pinMode(LEpin, OUTPUT);
 
   // SPI setup
-
-  SPI.begin(); //
-  SPI.setDataMode (SPI_MODE2); // Mode 3 SPI
-  SPI.setClockDivider(SPI_CLOCK_DIV8); // SCK = 16MHz/128= 125kHz
+  SPISetup();
 
   //buttons pins inits
   pinMode(pinSet,  INPUT_PULLUP);
@@ -469,12 +482,26 @@ void loop() {
 
 #if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
 
-  GetDataFromSerial1();
-
-  if ((millis() % 10001) == 0) //synchronize with GPS every 10 seconds
+  MillsNow=millis();
+  if ((MillsNow - Last_Time_GPS_Sync) > GPS_Sync_Interval)
   {
-    SyncWithGPS();
-    //Serial.println(F("Sync from GPS"));
+    //GPS_Sync_Interval = GPS_SYNC_INTERVAL; // <----!
+    //GPS_Sync_Flag = 0;
+    if (AttMsgWasShowed==false) 
+    {
+      Serial.println(F("Attempt to sync with GPS."));
+      AttMsgWasShowed=true;
+    }
+    GetDataFromSerial1();
+    //SyncWithGPS();
+  } 
+  if ((MillsNow - Last_Time_GPS_Sync) > GPS_Sync_Interval + TIME_TO_TRY) 
+  {
+    Last_Time_GPS_Sync=MillsNow; //if it is not possible to synchronize within the allotted time TIME_TO_TRY, then we postpone attempts to the next time interval.
+    //GPS_Sync_Flag = 1;   
+    //GPS_Sync_Interval = GPS_SYNC_INTERVAL; 
+    Serial.println(F("All attempts were unsuccessful."));
+    AttMsgWasShowed=false;
   }
 
   IRresults.value = 0;
@@ -884,12 +911,14 @@ void doTest()
 {
   Serial.print(F("Firmware version: "));
   Serial.println(FirmwareVersion.substring(1, 2) + "." + FirmwareVersion.substring(2, 5));
-  Serial.println(HardwareVersion);
+  for (byte k = 0; k < strlen_P(HardwareVersion); k++) {
+    Serial.print((char)pgm_read_byte_near(HardwareVersion + k));
+  }
+  Serial.println();
   Serial.println(F("Start Test"));
 
   p = song;
   parseSong(p);
-  //p=0; //need to be deleted
 
   analogWrite(RedLedPin, 255);
   delay(1000);
@@ -900,6 +929,11 @@ void doTest()
   analogWrite(BlueLedPin, 255);
   delay(1000);
   analogWrite(BlueLedPin, 0);
+
+  #if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
+  if (Serial1.available() > 10) Serial.println(F("GPS detected"));
+    else Serial.println(F("GPS NOT detected!"));
+  #endif
 
 #ifdef tubes9
   String testStringArray[11] = {"000000000", "111111111", "222222222", "333333333", "444444444", "555555555", "666666666", "777777777", "888888888", "999999999", ""};
@@ -1403,13 +1437,13 @@ void SyncWithGPS()
       //Serial.println(F("Parsed data to old"));
       return;
     }
-    /*Serial.println(F("Updating time..."));
+    Serial.println(F("Updating time..."));
     Serial.println(GPS_Date_Time.GPS_hours);
     Serial.println(GPS_Date_Time.GPS_minutes);
-    Serial.println(GPS_Date_Time.GPS_seconds);*/
+    Serial.println(GPS_Date_Time.GPS_seconds);
 
     setTime(GPS_Date_Time.GPS_hours, GPS_Date_Time.GPS_minutes, GPS_Date_Time.GPS_seconds, GPS_Date_Time.GPS_day, GPS_Date_Time.GPS_mounth, GPS_Date_Time.GPS_year % 1000);
-    adjustTime(value[HoursOffsetIndex] * 3600);
+    adjustTime((long)value[HoursOffsetIndex] * 3600);
     setRTCDateTime(hour(), minute(), second(), day(), month(), year() % 1000, 1);
     GPS_Sync_Flag = 1;
     Last_Time_GPS_Sync = millis();
@@ -1439,7 +1473,7 @@ void GetDataFromSerial1()
       GPS_Package[GPS_position] = 0;
       GPS_position = 0;
       if (ControlCheckSum()) {
-        /*Serial.println("Call parse");*/ GPS_Parse_DateTime();
+        if (GPS_Parse_DateTime()) SyncWithGPS();
       }
 
     }
@@ -1583,7 +1617,7 @@ boolean inRange( int no, int low, int high )
 {
   if ( no < low || no > high )
   {
-    //Serial.println(F("Not in range"));
+    Serial.println(F("Date or Time not in range"));
     //Serial.println(String(no) + ":" + String (low) + "-" + String(high));
     return false;
   }
@@ -1650,4 +1684,3 @@ void testDS3231TempSensor()
     }
   }
 }
-

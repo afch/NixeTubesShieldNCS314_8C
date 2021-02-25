@@ -1,7 +1,7 @@
 //driver for NCS314_8C (registers HV5122)
-//driver version 1.1
 //1 on register's output will turn on a digit 
 
+//v1.2 HV5222 MOD
 //v1.1 Mixed up on/off for dots
 //-----IN-19A-Tube-------------IN-19B-Tube----------IN-19V-Tube
 //     0 - %
@@ -18,6 +18,17 @@
 
 #define UpperDotsMask 0x80000000
 #define LowerDotsMask 0x40000000
+
+void SPISetup()
+{
+  pinMode(RHV5222PIN, INPUT_PULLUP);
+  HV5222=!digitalRead(RHV5222PIN);
+  SPI.begin(); //
+
+  if (HV5222)
+    SPI.beginTransaction(SPISettings(2000000, LSBFIRST, SPI_MODE2));
+    else SPI.beginTransaction(SPISettings(2000000, MSBFIRST, SPI_MODE2));
+}
 
 void doIndication()
 {
@@ -56,10 +67,19 @@ void doIndication()
   if (UD) Var32|=UpperDotsMask;
     else Var32&=~UpperDotsMask;  
     
-  SPI.transfer(Var32>>24);
-  SPI.transfer(Var32>>16);
-  SPI.transfer(Var32>>8);
-  SPI.transfer(Var32);
+  if (HV5222) 
+  {
+    SPI.transfer(Var32);
+    SPI.transfer(Var32>>8);
+    SPI.transfer(Var32>>16);
+    SPI.transfer(Var32>>24);
+  } else 
+  {
+    SPI.transfer(Var32>>24);
+    SPI.transfer(Var32>>16);
+    SPI.transfer(Var32>>8);
+    SPI.transfer(Var32);
+  }
  //-------------------------------------------------------------------------
 
  //-------- REG 1 ----------------------------------------------- 
@@ -80,10 +100,19 @@ void doIndication()
   if (UD) Var32|=UpperDotsMask;
     else Var32&=~UpperDotsMask;  
 
-  SPI.transfer(Var32>>24);
-  SPI.transfer(Var32>>16);
-  SPI.transfer(Var32>>8);
-  SPI.transfer(Var32);
+  if (HV5222) 
+  {
+    SPI.transfer(Var32);
+    SPI.transfer(Var32>>8);
+    SPI.transfer(Var32>>16);
+    SPI.transfer(Var32>>24);
+  } else 
+  {
+    SPI.transfer(Var32>>24);
+    SPI.transfer(Var32>>16);
+    SPI.transfer(Var32>>8);
+    SPI.transfer(Var32);
+  }
  //-------------------------------------------------------------------------
 
  //-------- REG 0 ----------------------------------------------- 
@@ -104,10 +133,19 @@ void doIndication()
   if (UD) Var32|=UpperDotsMask;
     else Var32&=~UpperDotsMask;  
      
-  SPI.transfer(Var32>>24);
-  SPI.transfer(Var32>>16);
-  SPI.transfer(Var32>>8);
-  SPI.transfer(Var32);
+  if (HV5222) 
+  {
+    SPI.transfer(Var32);
+    SPI.transfer(Var32>>8);
+    SPI.transfer(Var32>>16);
+    SPI.transfer(Var32>>24);
+  } else 
+  {
+    SPI.transfer(Var32>>24);
+    SPI.transfer(Var32>>16);
+    SPI.transfer(Var32>>8);
+    SPI.transfer(Var32);
+  }
 
   digitalWrite(LEpin, HIGH);    
 //-------------------------------------------------------------------------
@@ -156,4 +194,3 @@ word blankDigit(int pos)
   if (lowBit == 1) mask = 0xFFFF;
   return mask;
 }
-
