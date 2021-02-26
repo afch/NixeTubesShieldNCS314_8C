@@ -378,6 +378,7 @@ void setup()
 
 #if defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
   Serial1.begin(9600);
+  digitalWrite(19, HIGH);
 #endif
 
   if (EEPROM.read(HourFormatEEPROMAddress) != 12) value[hModeValueIndex] = 24; else value[hModeValueIndex] = 12;
