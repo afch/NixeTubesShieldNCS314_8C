@@ -1,8 +1,12 @@
-const String FirmwareVersion = "019400";
+const String FirmwareVersion = "019600";
 //#define HardwareVersion "NCS314-8C HW 2.x"
 const char HardwareVersion[] PROGMEM = {"NCS314-8C HW 2.x HV5122 or HV5222"};
 //Format                _X.XXX_
 //NIXIE CLOCK SHIELD NCS314-8C v 2.x by GRA & AFCH (fominalec@gmail.com)
+//1.96 14.02.2023
+//Fixed: DS18b20 zeros bug
+//1.95 14.01.2021
+//GPS ANTI ROLLOVER FIX
 //1.94 23.02.2021
 //The driver has been changed to support BOTH HV5122 and HV5222 registers (switching using resistor R5222 Arduino pin No. 8)
 //SPI initialization moved to function SPISetup()
@@ -1405,23 +1409,37 @@ String updateDateString()
 
 float getTemperature (boolean bTempFormat)
 {
-  byte TempRawData[2];
-  ds.reset();
-  ds.write(0xCC); //skip ROM command
-  ds.write(0x44); //send make convert to all devices
-  ds.reset();
-  ds.write(0xCC); //skip ROM command
-  ds.write(0xBE); //send request to all devices
+  static float fDegrees;
+  static int iterator=0;
+  static byte TempRawData[2];
 
-  TempRawData[0] = ds.read();
-  TempRawData[1] = ds.read();
-  int16_t raw = (TempRawData[1] << 8) | TempRawData[0];
-  if (raw == -1) raw = 0;
-  float celsius = (float)raw / 16.0;
-  //Serial.println(celsius);
-  float fDegrees;
-  if (!bTempFormat) fDegrees = celsius;
-  else fDegrees = (celsius * 1.8 + 32.0);
+  static uint32_t startTime=millis();
+
+  switch (iterator) 
+  {
+    case 0: ds.reset(); break; // 1 ms
+    case 1: ds.write(0xCC); break; //
+    case 2: ds.write(0x44); startTime=millis(); break; // 0-1 ms
+    case 3: if (millis()-startTime < 750) return fDegrees; break;
+    case 4: ds.reset(); break; //1 ms
+    case 5: ds.write(0xCC); break; //
+    case 6: ds.write(0xBE); break; //send request to all devices
+    case 7: TempRawData[0] = ds.read(); break;
+    case 8: TempRawData[1] = ds.read(); break;
+    default:  break;
+  }
+  
+ if (iterator == 9)
+  {
+    int16_t raw = (TempRawData[1] << 8) | TempRawData[0];
+    if (raw == -1) raw = 0;
+    float celsius = (float)raw / 16.0;
+     
+    if (!bTempFormat) fDegrees = celsius;
+    else fDegrees = (celsius * 1.8 + 32.0);
+  }
+  iterator++;
+  if (iterator==10) iterator=0;
   return fDegrees;
 }
 
@@ -1483,7 +1501,6 @@ void GetDataFromSerial1()
 
 bool GPS_Parse_DateTime()
 {
-  bool GPSsignal = false;
   if (!((GPS_Package[0]   == '$')
         && (GPS_Package[3] == 'R')
         && (GPS_Package[4] == 'M')
@@ -1511,6 +1528,12 @@ bool GPS_Parse_DateTime()
     if (GPS_Package[i] == ',')
     {
       CommasCounter++;
+      if (CommasCounter == 1)
+        if (GPS_Package[i + 1] != 'A') 
+        {
+          Serial.println("Validation failed");
+          return false;
+        }
       if (CommasCounter == 8)
       {
         GPSDatePos = i + 1;
@@ -1525,28 +1548,58 @@ bool GPS_Parse_DateTime()
   //Serial.print("MM: ");
   //Serial.println(MM);
   int yyyy = 2000 + (GPS_Package[GPSDatePos + 4] - 48) * 10 + GPS_Package[GPSDatePos + 5] - 48;
+  
   //Serial.print("yyyy: ");
   //Serial.println(yyyy);
   //if ((hh<0) || (mm<0) || (ss<0) || (dd<0) || (MM<0) || (yyyy<0)) return false;
-  if ( !inRange( yyyy, 2018, 2038 ) ||
+  if ( //!inRange( yyyy, 2018, 2038 ) ||
        !inRange( MM, 1, 12 ) ||
        !inRange( dd, 1, 31 ) ||
        !inRange( hh, 0, 23 ) ||
        !inRange( mm, 0, 59 ) ||
        !inRange( ss, 0, 59 ) ) return false;
-  else
+
+  if (yyyy < 2022) //fixing GPS rollover bug
   {
-    GPS_Date_Time.GPS_hours = hh;
-    GPS_Date_Time.GPS_minutes = mm;
-    GPS_Date_Time.GPS_seconds = ss;
-    GPS_Date_Time.GPS_day = dd;
-    GPS_Date_Time.GPS_mounth = MM;
-    GPS_Date_Time.GPS_year = yyyy;
-    GPS_Date_Time.GPS_Data_Parsed_time = millis();
-    //Serial.println("Precision TIME HAS BEEN ACCURED!!!!!!!!!");
-    //GPS_Package[0]=0x0A;
-    return 1;
+    tmElements_t tmpTmElemtns;
+    tmpTmElemtns.Second = ss;
+    tmpTmElemtns.Minute = mm;
+    tmpTmElemtns.Hour = hh;
+    tmpTmElemtns.Day = dd;
+    tmpTmElemtns.Month = MM;
+    tmpTmElemtns.Year = yyyy - 1970; //offset from 1970
+
+    time_t tmpTime_t;
+    tmpTime_t=makeTime(tmpTmElemtns);
+    //Serial.print("time_t=");
+    //Serial.println(tmpTime_t);
+    tmpTime_t=tmpTime_t + 619315200; // seconds in 1024 weeks = 1024*7*24*3600
+    //Serial.print("new time_t=");
+    //Serial.println(tmpTime_t);
+    breakTime(tmpTime_t, tmpTmElemtns);
+    /*Serial.print("new year=");
+    Serial.println(1970 + tmpTmElemtns.Year);
+    Serial.print("new month=");
+    Serial.println(tmpTmElemtns.Month);
+    Serial.print("new day=");
+    Serial.println(tmpTmElemtns.Day);*/
+    yyyy = 1970 + tmpTmElemtns.Year;
+    MM = tmpTmElemtns.Month;
+    dd = tmpTmElemtns.Day;
   }
+
+  if (!inRange( yyyy, 2018, 2038 )) return false;
+  
+  GPS_Date_Time.GPS_hours = hh;
+  GPS_Date_Time.GPS_minutes = mm;
+  GPS_Date_Time.GPS_seconds = ss;
+  GPS_Date_Time.GPS_day = dd;
+  GPS_Date_Time.GPS_mounth = MM;
+  GPS_Date_Time.GPS_year = yyyy;
+  GPS_Date_Time.GPS_Data_Parsed_time = millis();
+  //Serial.println("Precision TIME HAS BEEN ACCURED!!!!!!!!!");
+  //GPS_Package[0]=0x0A;
+  return 1;
 }
 
 uint8_t ControlCheckSum()
@@ -1625,28 +1678,12 @@ boolean inRange( int no, int low, int high )
   return true;
 }
 
-/*void testTemp()
-  {
-  //value[DegreesFormatIndex] = CELSIUS;
-  value[DegreesFormatIndex] = FAHRENHEIT;
-  for (float i=-255.0; i<255; i=i+0.5)
-  {
-    Serial.print("i=");
-    //if (value[DegreesFormatIndex] == CELSIUS) Serial.print("C"); else Serial.print("F");
-    Serial.println(i);
-    updateTemperatureString3Chars(i);
-    //Serial.println(PreZero(round(i)%100));
-  }
-  }
-*/
 String updateTemperatureString3Chars(float fDegrees)
 {
   static unsigned long lastTimeTemperatureString = millis() + 1100;
   static String tmpStr;
   if ((millis() - lastTimeTemperatureString) > 1000)
   {
-
-
     lastTimeTemperatureString = millis();
     tmpStr = PreZero(round(fDegrees) % 100) + getTempChar();
     //Serial.println(tmpStr);
