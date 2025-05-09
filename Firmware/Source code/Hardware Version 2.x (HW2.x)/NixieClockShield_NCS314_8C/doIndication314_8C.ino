@@ -4,16 +4,16 @@
 //v1.2 HV5222 MOD
 //v1.1 Mixed up on/off for dots
 //-----IN-19A-Tube-------------IN-19B-Tube----------IN-19V-Tube
-//     0 - %
-//     1 - M
-//     2 - P
-//     3 - m
-//     4 - K
-//     5 - n
-//     6 - u 
-//     7 - C (Celsius)
-//     8 - BLANK (EMPTY)
-//     9 - BLANK (EMPTY)
+//     0 - %                        S                   П
+//     1 - M                        F                   A/B
+//     2 - P                        H                   ~
+//     3 - m                        V                   <
+//     4 - K                        T                   -
+//     5 - n                        A                   >
+//     6 - u                       Ohm                  +
+//     7 - C (Celsius)              Hz                  dB
+//     8 - BLANK (EMPTY)        BLANK (EMPTY)
+//     9 - BLANK (EMPTY)        BLANK (EMPTY)
 #include "doIndication314_8C.h"
 
 #define UpperDotsMask 0x80000000

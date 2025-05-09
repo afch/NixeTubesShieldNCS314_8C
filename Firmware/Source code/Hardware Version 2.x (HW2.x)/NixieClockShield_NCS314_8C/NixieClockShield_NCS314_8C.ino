@@ -1,8 +1,9 @@
-const String FirmwareVersion = "019800";
+const String FirmwareVersion = "019900";
 //#define HardwareVersion "NCS314-8C HW 2.x"
 const char HardwareVersion[] PROGMEM = {"NCS314-8C HW 2.x HV5122 or HV5222"};
 //Format                _X.XXX_
 //NIXIE CLOCK SHIELD NCS314-8C v 2.x by GRA & AFCH (fominalec@gmail.com)
+//1.98 09.05.2025 //IN-19B support added
 //1.98 13.09.2023
 //Added: Night Mode
 //1.97 06.09.2023
@@ -52,6 +53,9 @@ const char HardwareVersion[] PROGMEM = {"NCS314-8C HW 2.x HV5122 or HV5222"};
 #define tubes9
 //#define tubes6
 //#define tubes4
+
+#define IN_19A
+//#define IN_19B
 
 #include <SPI.h>
 #include <Wire.h>
@@ -1743,10 +1747,18 @@ String updateTemperatureString3Chars(float fDegrees)
 
 char getTempChar()
 {
+#ifdef IN_19A
   char degrSymbol;
   if (value[DegreesFormatIndex] == CELSIUS) degrSymbol = '7';
   else degrSymbol = '2';
   return degrSymbol;
+#endif
+#ifdef IN_19B
+  char degrSymbol;
+  if (value[DegreesFormatIndex] == CELSIUS) degrSymbol = '4';
+  else degrSymbol = '1';
+  return degrSymbol;
+#endif
 }
 
 void RTC_Test()
